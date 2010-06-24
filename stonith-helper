@@ -1,0 +1,270 @@
+#!/bin/sh
+#
+# External STONITH module to check the dead or alive of target
+# and avoid shooting each other in split-brain.
+#
+# Copyright (c) 2009 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of version 2 of the GNU General Public License as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it would be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# Further, this software is distributed without any warranty that it is
+# free of the rightful claim of any third person regarding infringement
+# or the like.  Any license provided herein, whether implied or
+# otherwise, applies only to this software file.  Patent licenses, if
+# any, provided herein do not apply to combinations of this program with
+# other software, or any other product whatsoever.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write the Free Software Foundation,
+# Inc., 59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
+#
+
+# ha_log.sh for stonith external plugins
+HA_LOG_SH=ha_log.sh
+
+# Rewrite the hostlist to accept "," as a delimeter for hostnames too.
+hostlist=`echo $hostlist | tr ',' ' '`
+
+# Rewrite the target to accept "," as a delimeter for hostnames or ip too.
+dead_check_target=`echo $dead_check_target | tr ',' ' '`
+
+#Define default values.
+WAIT_TIME=15
+standby_wait_time=${standby_wait_time=${WAIT_TIME}}
+
+#
+# Check the result of ping command.
+# arg   : ping target
+# return: 0 -> up
+#         1 -> down
+#
+is_target_up() {
+	for j in 1 2 3 4 5
+	do
+		if ping -w1 -c1 "$1" >/dev/null 2>&1 ; then
+			return 0
+		fi
+		sleep 1
+	done
+	return 1
+}
+
+#
+# Check the parameter hostlist is set or not.
+# If not, exit with 1.
+#
+check_hostlist() {
+	if [ -z "${hostlist}" ]; then
+		${HA_LOG_SH} err "hostlist is empty."
+		exit 1
+	fi
+}
+
+#
+# Check validation and check required parameters are specified or not.
+# arg   : nothing
+# return: nothing (if error, exit with 1)
+#
+check_parameters() {
+	if ! expr "${run_dead_check}" : "[Nn]" >/dev/null 2>&1 ; then
+		if [ -z "${dead_check_target}" ]; then
+			${HA_LOG_SH} err "parameter \"dead_check_target\" is required when \"run_dead_check\" is not \"no\"."
+			exit 1
+		fi
+	fi
+
+	if ! expr "${run_standby_wait}" : "[Nn]" >/dev/null 2>&1 ; then
+		if [ -z "$standby_check_command" ]; then
+			${HA_LOG_SH} err "parameter \"standby_check_command\" is required when \"run_standby_wait\" is not \"no\"."
+			exit 1
+		elif ! (echo $standby_check_command | awk '{print $1}' | xargs which -- >/dev/null 2>&1) ; then
+			${HA_LOG_SH} err "`echo $standby_check_command | awk '{print $1}'`: command not found."
+			exit 1
+		fi
+		if (echo ${standby_wait_time} | grep -q '[^0-9]') ; then
+			${HA_LOG_SH} warn "parameter \"standby_wait_time\" is not digit (value=${standby_wait_time}). use default value. (value=${WAIT_TIME})"
+			standby_wait_time=${WAIT_TIME}
+		fi
+	fi
+}
+
+#
+# Check the dead or alive of target(s)
+# arg   : nothing
+# return: nothing (if all targets are dead, exit with 0)
+#
+dead_check() {
+	if expr "${run_dead_check}" : "[Nn]" >/dev/null 2>&1 ; then
+		${HA_LOG_SH} debug "Don't run dead_check"
+		return
+	fi
+
+	${HA_LOG_SH} debug "Run dead_check"
+	for t in ${dead_check_target}
+	do
+		if is_target_up $t ; then
+			${HA_LOG_SH} info "$t responded."
+			return
+		else
+			${HA_LOG_SH} info "$t do not responded."
+		fi
+	done
+	${HA_LOG_SH} info "all targets are dead."
+	exit 0
+}
+
+#
+# Wait for a while if the local node is standby.
+# arg   : nothing
+# return: nothing
+#
+standby_wait() {
+	if expr "${run_standby_wait}" : "[Nn]" >/dev/null 2>&1 ; then
+		${HA_LOG_SH} debug "Don't run standby_wait"
+		return
+	fi
+
+	${HA_LOG_SH} debug "Run standby_wait"
+	eval ${standby_check_command} >/dev/null 2>&1
+	rc=$?
+	${HA_LOG_SH} debug "standby check command: \"${standby_check_command}\" (rc=${rc})"
+	if [ "${rc}" != 0 ] ; then
+		${HA_LOG_SH} info "standby wait ${standby_wait_time}sec"
+		sleep ${standby_wait_time}
+	fi
+}
+
+#
+# main
+#
+case $1 in
+gethosts)
+	check_hostlist
+	for h in $hostlist
+	do
+		echo $h
+	done
+	exit 0
+	;;
+on)
+	exit 1
+	;;
+off|reset)
+	check_hostlist
+	check_parameters
+
+	dead_check
+	standby_wait
+
+	exit 1
+	;;
+status)
+	check_hostlist
+	check_parameters
+	exit 0
+	;;
+getconfignames)
+	echo "hostlist run_dead_check run_standby_wait dead_check_target standby_check_command standby_wait_time"
+	exit 0
+	;;
+getinfo-devid)
+    echo "External STONITH module to check target and avoid shooting each other."
+	exit 0
+	;;
+getinfo-devname)
+    echo "External STONITH module to check the dead or alive of target and avoid shooting each other in split-brain."
+	exit 0
+	;;
+getinfo-devdescr)
+	echo "To realize the following funcs."
+	echo " - check the dead or alive of target with ping command."
+	echo " - avoid fencing each other when sprit-brain occurs."
+	exit 0
+	;;
+getinfo-devurl)
+	echo "http://linux-ha.org/ja/"
+	exit 0
+	;;
+getinfo-xml)
+	cat << XML
+<parameters>
+<parameter name="hostlist" unique="1" required="1">
+<content type="string"/>
+<shortdesc lang="en">
+Hostlist
+</shortdesc>
+<longdesc lang="en">
+The list of hosts that the STONITH device controls.
+</longdesc>
+</parameter>
+
+<parameter name="run_dead_check" unique="1" required="0">
+<content type="string"/>
+<shortdesc lang="en">
+run dead check
+</shortdesc>
+<longdesc lang="en">
+If it is not "no" or not set, check the dead or alive of target.
+If it is "no", Don't check the dead or alive.
+</longdesc>
+</parameter>
+
+<parameter name="run_standby_wait" unique="1" required="0">
+<content type="string"/>
+<shortdesc lang="en">
+run standby wait
+</shortdesc>
+<longdesc lang="en">
+If it is not "no" or not set, check the local is active/standby.
+If it is "no", Don't check the active/standby.
+</longdesc>
+</parameter>
+
+<parameter name="dead_check_target" unique="1" required="0">
+<content type="string"/>
+<shortdesc lang="en">
+dead check target
+</shortdesc>
+<longdesc lang="en">
+The list of target that check the dead or alive.
+If all targets are dead, this STONITH plugin is exit 0.
+</longdesc>
+</parameter>
+
+<parameter name="standby_check_command" unique="1" required="0">
+<content type="string"/>
+<shortdesc lang="en">
+standby check command
+</shortdesc>
+<longdesc lang="en">
+The command that judges whether local is active or standby.
+If return code of command is "0", local node is active (not standby).
+If return code of command is not "0", local node is standby. Then, it waits.
+</longdesc>
+</parameter>
+
+<parameter name="standby_wait_time" unique="1" required="0">
+<content type="integer" default="$WAIT_TIME"/>
+<shortdesc lang="en">
+standby wait time(sec)
+</shortdesc>
+<longdesc lang="en">
+time (sec.) to wait when the local node is standby.
+To avoid fencing each other when split-brain occurs.
+</longdesc>
+</parameter>
+
+</parameters>
+XML
+	exit 0
+	;;
+*)
+	exit 1
+	;;
+esac

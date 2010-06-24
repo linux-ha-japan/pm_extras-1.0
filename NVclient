@@ -1,0 +1,342 @@
+#!/bin/sh
+#
+# Resource script for NetVault client
+#
+# Description:  Manages NetVault client as an OCF resource in
+#               an Active-Passive High Availability setup.
+# Version:      1.4	(2009/11/30)
+# Author:       Takayuki Tanaka
+# License:      GNU General Public License (GPL)
+# Copyright (c) 2007 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#
+#       usage: $0 {start|stop|monitor|meta-data}
+#
+#       The "start" arg starts netvault.
+#
+#       The "stop" arg stops it.
+#
+# OCF parameters:
+#  OCF_RESKEY_nv_home
+#  OCF_RESKEY_ignore_error
+#
+##########################################################################
+# Initialization:
+
+. ${OCF_ROOT}/resource.d/heartbeat/.ocf-shellfuncs
+#. /usr/lib/ocf/resource.d/heartbeat/.ocf-shellfuncs
+
+USAGE="usage: $0 {start|stop|monitor|meta-data}";
+RESOURCE_LOCKFILES="/var/lock/subsys/netvault"
+
+# Save Parameter
+NV_HOME=${OCF_RESKEY_nv_home}
+#NV_HOME=/usr/netvault
+IGN_ERR_FLG=${OCF_RESKEY_ignore_error}
+#IGN_ERR_FLG="off"
+
+
+#
+# Get meta-data Method
+#
+meta_data() {
+	findnvhome
+	cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="NVclient">
+<version>1.4</version>
+
+<longdesc lang="en">
+Resource script for NetVault client. It manages a Standardres instance as an HA resource.
+</longdesc>
+<shortdesc lang="en">NetVault client resource agent</shortdesc>
+
+<parameters>
+<parameter name="nv_home" unique="1" required="1">
+<longdesc lang="en">
+The NetVault home directory (NV_HOME).
+If not specified, then the SID along with its home should be listed in
+For example, "/usr/netvault"
+</longdesc>
+<shortdesc lang="en">home directory name</shortdesc>
+<content type="string" default="${NV_HOME}" />
+</parameter>
+<parameter name="ignore_error" unique="1">
+<longdesc lang="en">
+In case ignore error that this value is "on". Default is "off".
+</longdesc>
+<shortdesc lang="en">ignore error flag</shortdesc>
+<content type="string" default="off" />
+</parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="60s" />
+<action name="stop" timeout="60s" />
+<action name="status" timeout="60s" />
+<action name="monitor" depth="0" timeout="30s" interval="60s" start-delay="60s" />
+<action name="meta-data" timeout="5s" />
+</actions>
+</resource-agent>
+END
+	outputLog navi "output meta-data."
+	return ${OCF_SUCCESS}
+}
+
+
+#
+# Resource Running Check Method
+#
+isRunning(){
+	# process count
+	RET=0
+	# the process is checked twice
+	for (( i = 0; i < 2; i++ )); do
+		RET=`ps -ef | grep -E 'nvpmgr|nvcmgr|nvnmgr' | grep -v grep | wc -l`
+		# exist netvault process
+		if [ $RET = 3 ]; then
+			# exist netvault lockfile
+			if [ -e ${RESOURCE_LOCKFILES} ]; then
+				break
+			fi
+		fi
+		sleep 0.5
+	done
+	return $RET
+}
+
+
+#
+# Logging Method
+#
+outputLog(){
+	MODE=$1
+	shift
+	case $MODE in
+		navi)	ocf_log info "$*";;
+		info)	RET=$1; shift;
+			ocf_log $MODE "[$0 ${__OCF_ACTION}] OK:return=$RET" "$@";;
+		err)	RET=$1; shift;
+			ocf_log $MODE "[$0 ${__OCF_ACTION}] NG:return=$RET" "$@";;
+	esac
+}
+
+
+#
+# kill process
+#
+netvault_pkill(){
+	pkill -9 nvpmgr
+	pkill -9 nvcmgr
+	pkill -9 nvnmgr
+	MSG="kill NetVault client process!"
+	outputLog navi $MSG
+}
+
+
+#
+# Get Resource Status Method
+#
+netvault_status(){
+	# call standard status command in netvault command
+	RETMSG=`${NV_HOME}/bin/nvpmgr status 2>&1`
+	# check errors command output
+	RET=$?
+	if [ $RET -eq 0 ]; then
+		return ${OCF_SUCCESS}
+	else
+		MSG="NetVault client status ERROR!: $RET: $RETMSG"
+		outputLog err ${OCF_ERR_GENERIC} $MSG
+		return ${OCF_ERR_GENERIC}
+	fi
+}
+
+
+#
+# Get Resource Monitor Method
+#
+netvault_monitor(){
+	isRunning;
+	RET=$?
+	if [ $RET -eq 3 ]; then
+		# netvault running
+		netvault_status
+		if [ $? -eq ${OCF_SUCCESS} ]; then
+			# status OK
+			return ${OCF_SUCCESS}
+		else
+			break
+		fi
+	elif [ $RET -eq 0 ]; then
+		# netvault not running
+		MSG="NetVault client is not running."
+		outputLog info ${OCF_NOT_RUNNING} $MSG
+		return ${OCF_NOT_RUNNING}
+	fi
+	# status NG
+	for PS in nvpmgr nvcmgr nvnmgr
+	do
+		if [ -z `pgrep $PS` ]; then
+			MSG="Process $PS is NOT running"
+		else
+			MSG="Process $PS is running"
+		fi
+		outputLog err ${OCF_ERR_GENERIC} $MSG
+	done
+	return ${OCF_ERR_GENERIC}
+}
+
+#
+# Resource Start Method
+#
+netvault_start(){
+	outputLog navi "NetVault client is starting ..."
+	# check netvault running 
+	netvault_monitor
+	if [ $? -eq ${OCF_SUCCESS} ]; then
+		MSG="NetVault client is already running."
+		outputLog info ${OCF_SUCCESS} $MSG
+		return ${OCF_SUCCESS}
+	fi
+
+	# check netvault running 
+	while true
+	do
+		isRunning;
+		RET=$?
+		if [ $RET -eq 3 ]; then
+			# start OK
+			touch $RESOURCE_LOCKFILES
+			outputLog navi "NetVault client starts.";
+			return ${OCF_SUCCESS}
+		elif [ $RET -eq 0 ]; then
+			# netvault cleaning and start command
+			${NV_HOME}/bin/nvpmgr startup 
+			# check errors command output
+			RET=$?
+			if [ $RET -ne 0 ]; then
+				MSG="NetVault client start fatal error!: $RET"
+				outputLog err ${OCF_ERR_GENERIC} $MSG
+			fi
+		fi
+		sleep 1
+	done
+}
+
+
+#
+# Resource Stop Method
+#
+netvault_stop(){
+	outputLog navi "NetVault client is stopping ..."
+	# check netvault running
+	netvault_monitor
+	if [ $? -eq ${OCF_NOT_RUNNING} ]; then
+		MSG="NetVault client is already stopped." 
+		outputLog info ${OCF_SUCCESS} $MSG
+		return ${OCF_SUCCESS}
+	fi
+
+        isRunning;
+        RET=$?
+        if [ $RET -lt 3 ]; then
+		outputLog navi "NetVault client process is less then 3. Kill process"
+		netvault_pkill
+	else
+	        # netvault stop
+       		${NV_HOME}/bin/nvpmgr shutdown
+	fi
+	
+	# stop waiting
+	sleep 3
+	
+	isRunning;
+	RET=$?
+	if [ $RET -eq 0 ]; then
+		# stop OK
+	        rm -rf $RESOURCE_LOCKFILES
+	        outputLog navi "NetVault client stopped."
+	        return ${OCF_SUCCESS}
+	fi
+	
+	outputLog navi "NetVault client still hasn't stopped yet. Kill process"
+	netvault_pkill
+	
+	while true
+	do
+		sleep 2
+		isRunning;
+		RET=$?
+		if [ $RET -eq 0 ]; then
+			# stop OK
+			rm -rf $RESOURCE_LOCKFILES
+			outputLog navi "NetVault client stopped."
+			return ${OCF_SUCCESS}
+		elif [ "${IGN_ERR_FLG}" = "on" ]; then
+		        rm -rf $RESOURCE_LOCKFILES
+			outputLog navi "NetVault client still hasn't stopped yet. Ignore Error."
+			return ${OCF_SUCCESS}
+		fi
+	done
+}
+
+
+#
+# get NV_HOME from /etc/.nv6_home if not set
+#
+findnvhome() {
+	if [ ! -d "${NV_HOME}" ]; then
+		NV_HOME=`head -n 1 /etc/.nv6_home`
+	fi
+	if [ ! -d "$NV_HOME" ]; then
+		MSG="Cannot locate NetVault home directory."
+		outputLog err ${OCF_ERR_GENERIC} $MSG
+	fi
+}
+
+
+#
+# Change Status Method
+#
+change_status(){
+	RET_STATUS=$?
+	if [ "${IGN_ERR_FLG}" = "on" ]; then
+		RET_STATUS=${OCF_SUCCESS}
+	fi
+	return ${RET_STATUS}
+}
+
+
+#
+# Check Parameter Method
+#
+usage(){
+	echo $USAGE >&2
+}
+
+
+#
+# MAIN
+#
+if [ $# -ne 1 ]; then
+	# arguments error
+	MSG="Too many arguments or no arguments."
+	outputLog err ${OCF_ERR_ARGS} $MSG "line=${LINENO}"
+	exit ${OCF_ERR_ARGS}
+fi
+
+case $1 in
+	meta-data)	meta_data
+		exit $?;;
+	start)	netvault_start; change_status;
+		exit $?;;
+	stop)	netvault_stop; change_status;
+		exit $?;;
+	monitor)	netvault_monitor;
+		exit $?;;
+	usage)	usage; exit $OCF_SUCCESS;;
+	*)	MSG="You type invalid arguments.";
+		outputLog err ${OCF_ERR_ARGS} $MSG "line=${LINENO}"; usage
+		exit ${OCF_ERR_ARGS};;
+esac
+
