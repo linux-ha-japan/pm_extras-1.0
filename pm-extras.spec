@@ -3,7 +3,7 @@
 ########################################
 %define name pm-extras
 %define version 1.00
-%define release 1
+%define release 1.el5
 %define prefix /usr
 %define libdir	%{_libdir}
 #
