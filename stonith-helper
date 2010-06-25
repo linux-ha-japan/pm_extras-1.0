@@ -24,6 +24,7 @@
 # along with this program; if not, write the Free Software Foundation,
 # Inc., 59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
 #
+# Version 1.0
 
 # ha_log.sh for stonith external plugins
 HA_LOG_SH=ha_log.sh
