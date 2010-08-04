@@ -18,10 +18,11 @@ EXTRA_DIST              = $(ocf_SCRIPTS) $(ext_SCRIPTS) $(SPEC)
 $(TARFILE):
 	$(MAKE) dist
 
-srpm: clean
-        $(MAKE) $(SPEC) $(TARFILE)
-        rpmbuild --nodeps -bs $(SPEC)
-
 rpm: clean
-        $(MAKE) $(SPEC) $(TARFILE)
-        rpmbuild -ba $(SPEC)
+	cp $(TARFILE) `rpm -E "%_sourcedir"`
+	rpmbuild -ba $(SPEC)
+
+srpm: clean
+	cp $(TARFILE) `rpm -E "%_sourcedir"`
+	rpmbuild --nodeps -bs  $(SPEC)
+
