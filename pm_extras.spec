@@ -23,8 +23,8 @@ Source: %{name}-%{version}.tar.gz
 License: GPL
 Vendor: NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 BuildRoot: %{_tmppath}/%{name}-%{version}
-BuildRequires: make, pacemaker-libs-devel >= 1.0.9, heartbeat-devel >= 3.0.3, cluster-glue-libs-devel >= 1.0.6
-Requires: resource-agents >= 1.0.3, cluster-glue >= 1.0.5
+BuildRequires: make, pacemaker-libs-devel >= 1.0.9, heartbeat-devel >= 3.0.3, cluster-glue-libs-devel >= 1.0.6, corosynclib-devel >= 1.2.7
+Requires: pacemaker >= 1.0.9, resource-agents >= 1.0.3, cluster-glue >= 1.0.5
 
 ########################################
 %description

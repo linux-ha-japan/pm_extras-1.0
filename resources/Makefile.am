@@ -1,9 +1,8 @@
 MAINTAINERCLEANFILES	= Makefile.in
 
-OCFDIR			= /usr/lib/ocf/resource.d/heartbeat
-EXTDIR			= $(libdir)/stonith/plugins/external
+OCFHBDIR		= $(OCFDIR)/heartbeat
 
-ocfdir			= $(OCFDIR)
+ocfdir			= $(OCFHBDIR)
 ocf_SCRIPTS		= NVclient VIPcheck
 
 extdir			= $(EXTDIR)

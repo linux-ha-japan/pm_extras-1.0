@@ -5,8 +5,6 @@ INCLUDES		= -I/usr/include/pacemaker \
 			-I$(libdir)/glib-2.0/include \
 			-I/usr/include/libxml2
 
-CRM_DAEMON_DIR		= $(libdir)/heartbeat
-
 halibdir		= $(CRM_DAEMON_DIR)
 halib_PROGRAMS		= ifcheckd
 
@@ -30,5 +28,4 @@ install-data-hook:
 
 nstall-exec-local:
 	echo Ensure $(plugindir)/$(lib_LTLIBRARIES:.la=.so) is later linked/copied to $(LCRSODIR)/$(lib_LTLIBRARIES:.la=.lcrso)
-#	rm -f $(DESTDIR)$(LCRSODIR)/iface_check.lcrso
-#	cp $(DESTDIR)$(libdir)/iface_check.so $(DESTDIR)$(LCRSODIR)/iface_check.lcrso
+
