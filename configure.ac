@@ -3,8 +3,8 @@
 
 AC_PREREQ(2.59)
 #AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
-AC_INIT(pm-extras, 1.00)
-AM_INIT_AUTOMAKE(pm-extras, 1.00)
+AC_INIT(pm_extras, 1.0)
+AM_INIT_AUTOMAKE(pm_extras, 1.0)
 
 # Checks for programs.
 
