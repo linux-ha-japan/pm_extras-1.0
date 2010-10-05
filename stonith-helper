@@ -24,7 +24,6 @@
 # along with this program; if not, write the Free Software Foundation,
 # Inc., 59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
 #
-# Version 1.0
 
 # ha_log.sh for stonith external plugins
 HA_LOG_SH=ha_log.sh
@@ -38,6 +37,8 @@ dead_check_target=`echo $dead_check_target | tr ',' ' '`
 #Define default values.
 WAIT_TIME=15
 standby_wait_time=${standby_wait_time=${WAIT_TIME}}
+WAIT_CHECK_QUORUM_TIME=10
+quorum_check_wait_time=${quorum_check_wait_time=${WAIT_CHECK_QUORUM_TIME}}
 
 #
 # Check the result of ping command.
@@ -95,6 +96,33 @@ check_parameters() {
 	fi
 }
 
+# 
+# Check the quorum.
+# arg    : nothing
+# return : nothing
+#
+quorum_check() {
+        if expr "${run_quorum_check}" : "[Nn]" >/dev/null 2>&1 ; then
+                ${HA_LOG_SH} debug "Don't run quorum_check"
+                return
+        fi
+
+	${HA_LOG_SH} info "quorum check wait ${quorum_check_wait_time}sec"
+	sleep ${quorum_check_wait_time}
+
+	have_quorum=`crm_node -q 2>&1`
+	if [ $? -eq 0 ]; then
+        	if [ $have_quorum -eq 1 ]; then
+			${HA_LOG_SH} info "Have quorum."
+        	else
+			${HA_LOG_SH} warn "Cannot have quorum.Stonith-helper gives back OK for recomputation."
+                	exit 0
+        	fi
+	else
+		${HA_LOG_SH} err "crm_node error. ${have_quorum}"
+	fi
+	return
+}
 #
 # Check the dead or alive of target(s)
 # arg   : nothing
@@ -162,7 +190,7 @@ off|reset)
 
 	dead_check
 	standby_wait
-
+	quorum_check
 	exit 1
 	;;
 status)
@@ -216,6 +244,17 @@ If it is "no", Don't check the dead or alive.
 </longdesc>
 </parameter>
 
+<parameter name="run_quorum_check" unique="1" required="0">
+<content type="string"/>
+<shortdesc lang="en">
+run dead check
+</shortdesc>
+<longdesc lang="en">
+If it is not "no" or not set, check the quorum.
+If it is "no", Don't check the quorum.
+</longdesc>
+</parameter>
+
 <parameter name="run_standby_wait" unique="1" required="0">
 <content type="string"/>
 <shortdesc lang="en">
@@ -261,6 +300,16 @@ To avoid fencing each other when split-brain occurs.
 </longdesc>
 </parameter>
 
+<parameter name="quorum_check_wait_time" unique="1" required="0">
+<content type="integer" default="$WAIT_CHECK_QUORUM_TIME"/>
+<shortdesc lang="en">
+check quorum wait time(sec)
+</shortdesc>
+<longdesc lang="en">
+time (sec.) to wait when the check quorum.
+</longdesc>
+</parameter>
+
 </parameters>
 XML
 	exit 0
@@ -269,3 +318,4 @@ XML
 	exit 1
 	;;
 esac
+
