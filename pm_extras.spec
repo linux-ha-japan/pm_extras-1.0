@@ -1,6 +1,7 @@
 ########################################
 # Derived definitions
 ########################################
+%define __check_files %{nil}
 %define name pm_extras
 %define version 1.0
 %define release 1.el5
@@ -9,6 +10,7 @@
 #
 %define ocfdir /usr/lib/ocf/resource.d/heartbeat
 %define extdir %{_libdir}/stonith/plugins/external
+%define lcrsodir %{_libexecdir}/lcrso
 #
 #
 #
@@ -21,7 +23,7 @@ Source: %{name}-%{version}.tar.gz
 License: GPL
 Vendor: NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 BuildRoot: %{_tmppath}/%{name}-%{version}
-BuildRequires: make
+BuildRequires: make, pacemaker-libs-devel >= 1.0.9, heartbeat-devel >= 3.0.3, cluster-glue-libs-devel >= 1.0.6
 Requires: resource-agents >= 1.0.3, cluster-glue >= 1.0.5
 
 ########################################
@@ -95,6 +97,10 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 
 %dir %{extdir}
 %attr (755, root, root) %{extdir}/stonith-helper
+
+%attr (-,root,haclient) %{_libdir}/heartbeat/ifcheckd
+%dir %{lcrsodir}
+%attr (755, root, root) %{lcrsodir}/iface_check.lcrso
 
 ########################################
 %changelog

@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = Makefile.in
 
-SUBDIRS = resources
+SUBDIRS = resources tools
 
 SPEC                    = $(PACKAGE_NAME).spec
 TARFILE                 = $(PACKAGE_NAME)-$(VERSION).tar.gz
@@ -23,3 +23,7 @@ rpm: clean
 	$(MAKE) $(SPEC) $(TARFILE)
 	rpmbuild $(RPMBUILDOPTS) -ba --rmsource $(SPEC)
 
+install-exec-local:
+	rm -f $(DESTDIR)$(LCRSODIR)/iface_check.lcrso
+	mkdir -p $(DESTDIR)$(LCRSODIR)
+	cp $(DESTDIR)$(libdir)/iface_check.so $(DESTDIR)$(LCRSODIR)/iface_check.lcrso
