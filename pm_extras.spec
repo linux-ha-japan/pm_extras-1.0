@@ -1,8 +1,8 @@
 ########################################
 # Derived definitions
 ########################################
-%define name pm-extras
-%define version 1.00
+%define name pm_extras
+%define version 1.0
 %define release 1.el5
 %define prefix /usr
 %define libdir	%{_libdir}

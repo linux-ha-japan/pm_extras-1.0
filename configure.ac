@@ -16,5 +16,7 @@ AM_INIT_AUTOMAKE(pm-extras, 1.00)
 
 # Checks for library functions.
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES(Makefile	\
+		resources/Makefile
+		)
 AC_OUTPUT
