@@ -14,7 +14,7 @@
 #
 #
 #
-Summary: Extra Scripts for Pacemaker 
+Summary: Extra Tools & Scripts for Pacemaker 
 Name: %{name}
 Version: %{version}
 Release: %{release}
@@ -29,14 +29,18 @@ Requires: pacemaker >= 1.0.9, resource-agents >= 1.0.3, cluster-glue >= 1.0.5
 ########################################
 %description
 Extra Scripts 
- for resoucr-agent 1.0.3 
+ for pacemaker 1.0.9 
            and 
-     cluster-glue 1.0.5
+     resoucr-agent 1.0.3 
+           and 
+     cluster-glue 1.0.6
 
- * 2010/06/24
+ * 2010/10/6
    * RA NVclient 1.4
    * RA VIPcheck 1.1
    * plugin stonith-helper 1.0
+   * tool ifcheckd 1.0 for Heartbeat
+   * tool iface_check.lcrso 1.0 for Corosync
 
 ########################################
 %prep
@@ -105,5 +109,5 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 ########################################
 %changelog
 ########################################
-* Thu Jun 24 2010 Junko IKEDA <ikedaj@intellilink.co.jp>
+* Wed Oct 6 2010 Yuusuke IIDA <iidayuus@intellilink.co.jp>
 - initial release

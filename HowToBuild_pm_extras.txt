@@ -1,0 +1,16 @@
+This procedure describes how to build pm-extras on RHEL.
+The following packages are necessary for build.
+ * cluster-glue-libs-devel
+ * corosynclib-devel
+ * pacemaker-libs-devel
+ * heartbeat-devel
+
+[ Build procedure ]
+# ./autogen.sh
+# ./configure
+# make rpm
+
+Wrote: /usr/src/redhat/SRPMS/pm_extras-1.0-1.el5.src.rpm
+Wrote: /usr/src/redhat/RPMS/x86_64/pm_extras-1.0-1.el5.x86_64.rpm
+Wrote: /usr/src/redhat/RPMS/x86_64/pm_extras-debuginfo-1.0-1.el5.x86_64.rpm
+
