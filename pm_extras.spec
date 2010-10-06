@@ -24,7 +24,7 @@ License: GPL
 Vendor: NIPPON TELEGRAPH AND TELEPHONE CORPORATION
 BuildRoot: %{_tmppath}/%{name}-%{version}
 BuildRequires: make, pacemaker-libs-devel >= 1.0.9, heartbeat-devel >= 3.0.3, cluster-glue-libs-devel >= 1.0.6, corosynclib-devel >= 1.2.7
-Requires: pacemaker >= 1.0.9, resource-agents >= 1.0.3, cluster-glue >= 1.0.5
+Requires: pacemaker >= 1.0.9, resource-agents >= 1.0.3, cluster-glue >= 1.0.6, heartbeat >= 3.0.3
 
 ########################################
 %description
@@ -41,6 +41,7 @@ Extra Scripts
    * plugin stonith-helper 1.0
    * tool ifcheckd 1.0 for Heartbeat
    * tool iface_check.lcrso 1.0 for Corosync
+    - The use is going to be enabled after corosync-2.0.
 
 ########################################
 %prep
@@ -105,6 +106,10 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 %attr (-,root,haclient) %{_libdir}/heartbeat/ifcheckd
 %dir %{lcrsodir}
 %attr (755, root, root) %{lcrsodir}/iface_check.lcrso
+
+%doc %{_docdir}/pm_extras/README
+%doc %{_docdir}/pm_extras/HowToBuild_pm_extras.txt
+
 
 ########################################
 %changelog

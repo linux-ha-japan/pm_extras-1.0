@@ -1,4 +1,4 @@
-This procedure describes how to build pm-extras on RHEL.
+This procedure describes how to build pm_extras on RHEL.
 The following packages are necessary for build.
  * cluster-glue-libs-devel
  * corosynclib-devel

@@ -1,0 +1,117 @@
+= ifcheckd README =
+
+== 1.はじめに ==
+ * 本デーモンは、Heartbeat環境においてインターフェースの状態を監視するものです。
+ * 監視するインターフェースの情報は、自ノードに接続されている他ノードのインターフェースの状態として表示されます。
+ * "crm_mon -A"コマンドを使用して、Heartbeatが利用するインターフェースの状態を確認することができます。
+ * 本説明では64ビット環境を前提に記述しています。32ビット環境ではインストールされるディレクトリが異なるため、環境に合わせて読み替えてください。
+
+== 2.インストール ==
+ * 本ツールのパッケージ pm_extras-1.0-1.el5.x86_64.rpm をダウンロードします。その後、以下のようにrpmコマンドを使ってインストールします。
+{{{
+# rpm -ivh pm_extras-1.0-1.el5.x86_64.rpm 
+準備中...                ########################################### [100%]
+   1:pm_extras              ########################################### [100%]
+#
+}}}
+  - (注)pm_extras-1.0パッケージはインストールに以下のパッケージを必要とします
+   * pacemaker-1.0.9以上
+   * heartbeat-3.0.3以上
+   * resource-agents-1.0.3以上
+   * cluster-glue-1.0.6以上
+
+== 3.使用方法 ==
+=== 3.1 設定 ===
+ * ifcheckdを動作させるためには、ha.cfへの設定が必要となります。
+ * ha.cfへの設定追加
+{{{
+(..略..)
+respawn root /usr/lib64/heartbeat/ifcheckd
+(..略..)
+}}}
+
+=== 3.2 起動・停止 ===
+ * ifcheckdの起動は3.1の設定により、Heartbeatから起動されます。
+{{{
+# service heartbeat start
+Starting High-Availability services:                       [  OK  ]
+# 
+}}}
+ * ifcheckdの停止は3.1の設定により、Heartbeatから停止されます。
+{{{
+# service heartbeat stop
+Stopping High-Availability services:                       [  OK  ]
+#
+}}}
+
+=== 3.3 動作確認 ===
+ * ifcheckdが正常に起動していることを"crm_mon -A1"で確認します。
+{{{
+# crm_mon -A1
+============
+Last updated: Tue Sep 28 18:10:07 2010
+Stack: Heartbeat
+Current DC: x3650b (fc176982-a284-4e67-b375-e245ba9e0c7a) - partition with quorum
+Version: 1.0.9-612f699e3e337e7ddfb515747d1b39af85cd7ea1
+2 Nodes configured, unknown expected votes
+0 Resources configured.
+============
+
+Online: [ x3650a x3650b ]
+
+
+Node Attributes:
+* Node x3650a:
+    + x3650b-eth2                       : up        
+    + x3650b-eth4                       : up        
+* Node x3650b:
+    + x3650a-eth2                       : up        
+    + x3650a-eth4                       : up        
+# 
+}}}
+ * インターフェースの状態を表す属性値は、以下のように表示されます。
+  - 正常時
+{{{
+    + x3650b-eth2                       : up        
+}}}
+  - 故障時
+{{{
+    + x3650b-eth2                       : dead      
+}}}
+ * 属性値がdeadと表示されたノードのインターフェースとは通信ができない状態となっています。直ちに原因を調査し復旧してください。
+ * OFFLINE状態のノードのインターフェース情報は表示されません。
+
+== 4.起動オプション一覧 ==
+ * -d <sec>：属性値更新までの遅延時間の指定。デフォルト：0s
+ * -p <file_name>：デーモン化モードでの動作時のpidファイル名の指定。デフォルト：/var/run/ifcheckd.pid
+ * -D：デーモン化の指定
+ * -V：標準エラー出力にログを出力するモードの有効化
+ * -$：バージョン情報の表示
+ * -?：ヘルプの表示
+
+== 5.ログ一覧 ==
+ * 以下にifcheckdが出力するログの一覧を提示します。
+
+||レベル||出力内容||意味||出力関数||
+||critical||Lost connection to heartbeat service!||Heartbeatとの接続が切断された||ifcheckd_ha_connection_destroy||
+||error||Cannot signon with heartbeat||Heartbeatプロセスへのサインオンに失敗した||register_with_ha||
+||error||REASON: <errmsg>||上記失敗時の理由||register_with_ha||
+||error||failed to get node uname.||自ノードのuname取得に失敗した。||register_with_ha||
+||error||Cannot set Link status callback: <errmsg>||インターフェース状態変化通知のコールバック設定に失敗した||register_with_ha||
+||error||Cannot start heartbeat link interface walk.||インターフェース情報取得開始に失敗した||do_if_walk||
+||error||REASON: <errmsg>||上記失敗時の理由||do_if_walk||
+||error||Cannot end heartbeat link interface walk||インターフェース情報取得終了に失敗した||do_if_walk||
+||error||REASON: <errmsg>||上記失敗時の理由||do_if_walk||
+||error||Cannot start node walk.||ノード情報取得開始に失敗した||do_node_walk||
+||error||REASON: <errmsg>||上記失敗時の理由||do_node_walk||
+||error||Cannot end node walk.||ノード情報取得終了に失敗した||do_node_walk||
+||error||REASON: <errmsg>||上記失敗時の理由||do_node_walk||
+||error||Argument code 0<arg> (<arg>) is not (?yet?) supported||実装されていないコマンドライン引数が指定された||main||
+||error||non-option ARGV-elements: <arg>||必要なオプションが指定されていない||main||
+||error||HA registration failed||Hearbeatへのクライアント登録に失敗した||main||
+||info||Requesting the list of configured nodes||設定されたノードリストを取得します||do_node_walk||
+||info||Starting <system_name>||ifcheckdを開始し、mainloopに入る||main||
+||info||Exiting <system_name>||ifcheckdを終了する||main||
+  - (注)debugレベルは除外
+
+

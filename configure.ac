@@ -117,6 +117,7 @@ eval includedir="`eval echo ${includedir}`"
 eval oldincludedir="`eval echo ${oldincludedir}`"
 eval infodir="`eval echo ${infodir}`"
 eval mandir="`eval echo ${mandir}`"
+eval docdir="`eval echo ${docdir}`"
 
 AC_MSG_RESULT([])
 AC_MSG_RESULT([$PACKAGE configuration:])
@@ -128,6 +129,7 @@ AC_MSG_RESULT([  Libraries                = ${libdir}])
 AC_MSG_RESULT([  Header files             = ${includedir}])
 AC_MSG_RESULT([  State information        = ${localstatedir}])
 AC_MSG_RESULT([  System configuration     = ${sysconfdir}])
+AC_MSG_RESULT([  Document directory       = ${docdir}])
 AC_MSG_RESULT([  AIS Plugins              = ${LCRSODIR}])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([  HA group name            = ${CRM_DAEMON_GROUP}])
