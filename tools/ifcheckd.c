@@ -22,6 +22,7 @@
 
 #include <libgen.h>
 #include <crm/common/cluster.h>
+#include <crm/cib.h>
 
 static ll_cluster_t *hb_cluster = NULL;
 const char *node_uname = NULL;
@@ -29,6 +30,7 @@ GMainLoop* mainloop = NULL;
 gboolean need_shutdown = FALSE;
 int attr_dampen = 0; /* 0s */
 int ident;	/* our pid */
+cib_t *cib_conn = NULL;
 
 static void ifcheckd_lstatus_callback(
 	const char *node, const char *link, const char *status, void *private_data);
@@ -226,6 +228,9 @@ main(int argc, char **argv)
 	int flag;
 	const char *pid_file = NULL;
 	gboolean daemonize = FALSE;
+	enum cib_errors rc = cib_ok;
+	xmlNode *cib_xml_copy = NULL;
+	const char * dc_uuid = NULL;
 	
 	int option_index = 0;
 	pid_file = "/var/run/ifcheckd.pid";
@@ -285,6 +290,29 @@ main(int argc, char **argv)
 
 	crm_make_daemon(crm_system_name, daemonize, pid_file);
 	ident = getpid();
+
+	cib_conn = cib_new(); 
+	do {
+		rc = cib_conn->cmds->signon(cib_conn, crm_system_name, cib_command);
+		if(rc != cib_ok) {
+			crm_debug_2("Signon to CIB failed: %s", cib_error2string(rc));
+			sleep(1);
+		}
+	} while(rc != cib_ok);
+
+	crm_debug("Signon to CIB");
+
+	while(dc_uuid == NULL) {
+		cib_xml_copy = get_cib_copy(cib_conn);
+		if(cib_xml_copy == NULL) {
+			free_xml(cib_xml_copy);
+			sleep(1);
+			continue;
+		}
+		dc_uuid = crm_element_value(cib_xml_copy, XML_ATTR_DC_UUID); 
+	}
+	crm_debug("DC uuid [%s]", dc_uuid);
+	free_xml(cib_xml_copy);
 
 	if(register_with_ha() == FALSE) {
 		crm_err("HA registration failed");
