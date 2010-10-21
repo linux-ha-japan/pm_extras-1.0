@@ -302,17 +302,19 @@ main(int argc, char **argv)
 
 	crm_debug("Signon to CIB");
 
-	while(dc_uuid == NULL) {
+	while(1) {
 		cib_xml_copy = get_cib_copy(cib_conn);
-		if(cib_xml_copy == NULL) {
+		if(cib_xml_copy != NULL) {
+			dc_uuid = crm_element_value(cib_xml_copy, XML_ATTR_DC_UUID); 
+			if(dc_uuid != NULL) {
+				crm_debug("DC uuid [%s]", dc_uuid);
+				free_xml(cib_xml_copy);
+				break;
+			}
 			free_xml(cib_xml_copy);
-			sleep(1);
-			continue;
 		}
-		dc_uuid = crm_element_value(cib_xml_copy, XML_ATTR_DC_UUID); 
+		sleep(1);
 	}
-	crm_debug("DC uuid [%s]", dc_uuid);
-	free_xml(cib_xml_copy);
 
 	if(register_with_ha() == FALSE) {
 		crm_err("HA registration failed");
@@ -328,6 +330,11 @@ main(int argc, char **argv)
 	if(is_heartbeat_cluster()) {
 		hb_cluster->llc_ops->signoff(hb_cluster, TRUE);
 		hb_cluster->llc_ops->delete(hb_cluster);
+	}
+
+	if(cib_conn) {
+		cib_conn->cmds->signoff(cib_conn);
+		cib_delete(cib_conn);
 	}
 
 	return 0;
