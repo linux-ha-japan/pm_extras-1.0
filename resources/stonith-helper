@@ -37,6 +37,8 @@ dead_check_target=`echo $dead_check_target | tr ',' ' '`
 #Define default values.
 WAIT_TIME=15
 standby_wait_time=${standby_wait_time=${WAIT_TIME}}
+RUN_QUORUM_CHK="no"
+run_quorum_check=${run_quorum_check=${RUN_QUORUM_CHK}}
 WAIT_CHECK_QUORUM_TIME=10
 quorum_check_wait_time=${quorum_check_wait_time=${WAIT_CHECK_QUORUM_TIME}}
 
@@ -199,7 +201,7 @@ status)
 	exit 0
 	;;
 getconfignames)
-	echo "hostlist run_dead_check run_standby_wait dead_check_target standby_check_command standby_wait_time"
+	echo "hostlist run_dead_check run_quorum_check run_standby_wait dead_check_target standby_check_command standby_wait_time check_quorum_wait_time"
 	exit 0
 	;;
 getinfo-devid)
@@ -245,13 +247,15 @@ If it is "no", Don't check the dead or alive.
 </parameter>
 
 <parameter name="run_quorum_check" unique="1" required="0">
-<content type="string"/>
+<content type="string" default="$RUN_QUORUM_CHK"/>
 <shortdesc lang="en">
-run dead check
+run quorum check
 </shortdesc>
 <longdesc lang="en">
 If it is not "no" or not set, check the quorum.
 If it is "no", Don't check the quorum.
+When setting of "no-quorum-policy" is set in "freeze" or "stop", you can use this parameter.
+In the case of others, this parameter must not set it.
 </longdesc>
 </parameter>
 
