@@ -35,7 +35,7 @@ hostlist=`echo $hostlist | tr ',' ' '`
 dead_check_target=`echo $dead_check_target | tr ',' ' '`
 
 #Define default values.
-WAIT_TIME=15
+WAIT_TIME=25
 standby_wait_time=${standby_wait_time=${WAIT_TIME}}
 RUN_QUORUM_CHK="no"
 run_quorum_check=${run_quorum_check=${RUN_QUORUM_CHK}}
