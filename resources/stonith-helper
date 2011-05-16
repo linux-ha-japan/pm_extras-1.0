@@ -27,7 +27,6 @@
 
 # ha_log.sh for stonith external plugins
 HA_LOG_SH=ha_log.sh
-
 # Rewrite the hostlist to accept "," as a delimeter for hostnames too.
 hostlist=`echo $hostlist | tr ',' ' '`
 
@@ -41,6 +40,8 @@ RUN_QUORUM_CHK="no"
 run_quorum_check=${run_quorum_check=${RUN_QUORUM_CHK}}
 WAIT_CHECK_QUORUM_TIME=10
 quorum_check_wait_time=${quorum_check_wait_time=${WAIT_CHECK_QUORUM_TIME}}
+DEAD_CHECK_TRIALCOUNT=5
+dead_check_trialcount=${dead_check_trialcount=${DEAD_CHECK_TRIALCOUNT}}
 
 #
 # Check the result of ping command.
@@ -49,13 +50,37 @@ quorum_check_wait_time=${quorum_check_wait_time=${WAIT_CHECK_QUORUM_TIME}}
 #         1 -> down
 #
 is_target_up() {
-	for j in 1 2 3 4 5
-	do
-		if ping -w1 -c1 "$1" >/dev/null 2>&1 ; then
+	trap 'exit 0' 15
+
+	local cmd="ping"
+	local ipt=$1
+	local cnt=$2
+
+	# get option and command set #
+	if [ x`echo ${ipt} | grep '%'` != "x" ]; then
+		if [ x`echo ${ipt##*\%}` != "x" ]; then
+			if_option=`echo -I${ipt##*\%}`
+		fi
+	fi
+	ipt=`echo ${ipt%%\%*}`
+	if [ x`echo ${ipt} | grep ':'` != "x" ]; then
+		cmd="ping6"
+	fi
+	cmdl=`echo ${cmd} -c1 -w1 ${if_option} -- ${ipt}`
+	
+	# exec ping #
+	ix=0
+	while [ $ix -lt ${cnt} ] ; do
+		output=`${cmdl} 2>&1 >/dev/null`
+		if [ $? -eq 0 ] ; then
+			${HA_LOG_SH} info "$ipt responded."
 			return 0
 		fi
 		sleep 1
+		ix=`expr $ix + 1`
 	done
+
+	${HA_LOG_SH} info "$ipt do not responded."
 	return 1
 }
 
@@ -80,6 +105,13 @@ check_parameters() {
 		if [ -z "${dead_check_target}" ]; then
 			${HA_LOG_SH} err "parameter \"dead_check_target\" is required when \"run_dead_check\" is not \"no\"."
 			exit 1
+		fi
+		if (echo ${dead_check_trialcount} | grep -q '[^0-9]') ; then
+			${HA_LOG_SH} warn "parameter \"dead_check_trialcount\" is not digit (value=${dead_check_trialcount}). use default value. (value=${DEAD_CHECK_TRIALCOUNT})"
+			dead_check_trialcount=${DEAD_CHECK_TRIALCOUNT}
+		elif [ ${dead_check_trialcount} -eq 0 ] ; then 
+			${HA_LOG_SH} warn "parameter \"dead_check_trialcount\" is zero. use default value. (value=${DEAD_CHECK_TRIALCOUNT})"
+			dead_check_trialcount=${DEAD_CHECK_TRIALCOUNT}
 		fi
 	fi
 
@@ -137,15 +169,75 @@ dead_check() {
 	fi
 
 	${HA_LOG_SH} debug "Run dead_check"
-	for t in ${dead_check_target}
-	do
-		if is_target_up $t ; then
-			${HA_LOG_SH} info "$t responded."
-			return
-		else
-			${HA_LOG_SH} info "$t do not responded."
-		fi
+
+	# initiallize #
+	local child_array=()
+	local child_result=1
+
+	# start parallel ping #
+	for target_ip in ${dead_check_target} ; do
+
+		# child ping			
+		is_target_up ${target_ip} ${dead_check_trialcount} &
+
+		# save child pid #
+		child_pid=$!
+		count=${#child_array[@]} 
+		child_array[$count]=$child_pid
 	done
+
+	count=${#child_array[@]} 
+
+	# child wait #
+	while : ; do
+		local running=0
+		local i=0
+		while [ $i -lt $count ] ; do
+			local child_pid="${child_array[i]}"
+			if [ $child_pid -ne 0 ]; then
+				kill -s 0 $child_pid > /dev/null 2>&1
+				if [ $? -eq 0 ]; then
+					# running child #
+					running=1
+				else
+					# finish child #
+					wait $child_pid
+					child_result=$?
+					child_array[i]=0         
+				fi
+			fi
+			i=`expr $i + 1`
+		done
+
+		if [ $child_result -eq 0 -o $running -eq 0 ]; then
+			break
+		fi
+		sleep 1
+	done
+
+	# child kill #
+	for sig in TERM KILL ; do
+		local i=0
+		while [ $i -lt $count ] ; do
+			local child_pid="${child_array[i]}"
+			if [ $child_pid -ne 0 ]; then
+				kill -s 0 $child_pid > /dev/null 2>&1
+				if [ $? -eq 0 ]; then
+					kill -s $sig $child_pid > /dev/null 2>&1
+				else
+					child_array[i]=0         
+				fi
+			fi
+			i=`expr $i + 1`
+		done
+		sleep 1
+	done
+
+	# finish #
+	if [ $child_result -eq 0 ]; then
+		return
+	fi
+
 	${HA_LOG_SH} info "all targets are dead."
 	exit 0
 }
@@ -201,7 +293,7 @@ status)
 	exit 0
 	;;
 getconfignames)
-	echo "hostlist run_dead_check run_quorum_check run_standby_wait dead_check_target standby_check_command standby_wait_time check_quorum_wait_time"
+	echo "hostlist run_dead_check run_quorum_check run_standby_wait dead_check_target dead_check_trialcount standby_check_command standby_wait_time quorum_check_wait_time"
 	exit 0
 	;;
 getinfo-devid)
@@ -278,6 +370,11 @@ dead check target
 <longdesc lang="en">
 The list of target that check the dead or alive.
 If all targets are dead, this STONITH plugin is exit 0.
+Please appoint this parameter in an IP address.
+This parameter cannot appoint the host name.
+Designated example in IPv4 : 192.168.40.10 
+Designated example in IPv6 : fe80::20c:29ff:fe8a:d5d
+Designated example in IPv6(interface designation) : fe80::20c:29ff:fe8a:d5d%eth0
 </longdesc>
 </parameter>
 
@@ -311,6 +408,16 @@ check quorum wait time(sec)
 </shortdesc>
 <longdesc lang="en">
 time (sec.) to wait when the check quorum.
+</longdesc>
+</parameter>
+
+<parameter name="dead_check_trialcount" unique="1" required="0">
+<content type="integer" default="$DEAD_CHECK_TRIALCOUNT"/>
+<shortdesc lang="en">
+dead check trialcount
+</shortdesc>
+<longdesc lang="en">
+The number of the rerun of ping to a designated address of dead_check_target.
 </longdesc>
 </parameter>
 

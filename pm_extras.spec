@@ -3,7 +3,7 @@
 ########################################
 %define __check_files %{nil}
 %define name pm_extras
-%define version 1.0
+%define version 1.1
 %define release 1.el5
 %define prefix /usr
 %define libdir	%{_libdir}
@@ -114,5 +114,6 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 ########################################
 %changelog
 ########################################
+* Fri May 13 2011 Hideo Yamauchi <yamauchi@matrixjpn.com>
 * Wed Oct 6 2010 Yuusuke IIDA <iidayuus@intellilink.co.jp>
 - initial release
