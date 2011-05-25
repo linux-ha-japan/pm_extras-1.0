@@ -91,11 +91,21 @@ CRM_DAEMON_USER=`extract_header_define $GLUE_HEADER HA_CCMUSER`
 AC_DEFINE_UNQUOTED(CRM_DAEMON_USER,"$CRM_DAEMON_USER", User to run Pacemaker daemons as)
 AC_SUBST(CRM_DAEMON_USER)
 
+grep "release 6" /etc/redhat-release -q
+if test $? = 0; then
+        rhelver=6
+else
+        rhelver=5
+fi
+RHEL_VER="$rhelver"
+AC_SUBST(RHEL_VER)
+
 # Checks for library functions.
 
 AC_CONFIG_FILES(Makefile	\
 		resources/Makefile \
-		tools/Makefile
+		tools/Makefile \
+		pm_extras.spec
 		)
 AC_OUTPUT
 
