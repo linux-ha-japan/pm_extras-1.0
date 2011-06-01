@@ -4,7 +4,7 @@
 #
 # Description:  Manages NetVault client as an OCF resource in
 #               an Active-Passive High Availability setup.
-# Version:      1.4	(2009/11/30)
+# Version:      1.5	(2011/05/27)
 # Author:       Takayuki Tanaka
 # License:      GNU General Public License (GPL)
 # Copyright (c) 2007 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
@@ -22,51 +22,47 @@
 ##########################################################################
 # Initialization:
 
-. ${OCF_ROOT}/resource.d/heartbeat/.ocf-shellfuncs
-#. /usr/lib/ocf/resource.d/heartbeat/.ocf-shellfuncs
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/resource.d/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/.ocf-shellfuncs
 
 USAGE="usage: $0 {start|stop|monitor|meta-data}";
 RESOURCE_LOCKFILES="/var/lock/subsys/netvault"
 
-# Save Parameter
-NV_HOME=${OCF_RESKEY_nv_home}
-#NV_HOME=/usr/netvault
-IGN_ERR_FLG=${OCF_RESKEY_ignore_error}
-#IGN_ERR_FLG="off"
-
+OCF_RESKEY_ignore_error_default=off
+: ${OCF_RESKEY_nv_home=`head -n 1 /etc/.nv6_home`}
+: ${OCF_RESKEY_ignore_error=${OCF_RESKEY_ignore_error_default}}
 
 #
 # Get meta-data Method
 #
 meta_data() {
-	findnvhome
 	cat <<END
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="NVclient">
-<version>1.4</version>
+<version>1.5</version>
 
 <longdesc lang="en">
-Resource script for NetVault client. It manages a Standardres instance as an HA resource.
+Resource Agent script for NetVault client. It manages a NetVault client instance as a HA resource.
 </longdesc>
 <shortdesc lang="en">NetVault client resource agent</shortdesc>
 
 <parameters>
-<parameter name="nv_home" unique="1" required="1">
+<parameter name="nv_home" unique="1">
 <longdesc lang="en">
 The NetVault home directory (NV_HOME).
-If not specified, then the SID along with its home should be listed in
-For example, "/usr/netvault"
+It should be on the shared disk in the typical NetVault cluster configuration.
+Refer to /etc/.nv6_home to make sure your configuration.
 </longdesc>
 <shortdesc lang="en">home directory name</shortdesc>
-<content type="string" default="${NV_HOME}" />
+<content type="string" default="`head -n 1 /etc/.nv6_home`" />
 </parameter>
 <parameter name="ignore_error" unique="1">
 <longdesc lang="en">
 In case ignore error that this value is "on". Default is "off".
 </longdesc>
 <shortdesc lang="en">ignore error flag</shortdesc>
-<content type="string" default="off" />
+<content type="string" default="${OCF_RESKEY_ignore_error_default}" />
 </parameter>
 </parameters>
 
@@ -90,8 +86,10 @@ END
 isRunning(){
 	# process count
 	RET=0
-	# the process is checked twice
-	for (( i = 0; i < 2; i++ )); do
+
+	# Retry the process check for the case of nvcmgr/nvnmgr process is
+	# restarted by the main nvpmgr process.
+ 	for i in 1 2 ; do
 		RET=`ps -ef | grep -E 'nvpmgr|nvcmgr|nvnmgr' | grep -v grep | wc -l`
 		# exist netvault process
 		if [ $RET = 3 ]; then
@@ -100,7 +98,7 @@ isRunning(){
 				break
 			fi
 		fi
-		sleep 0.5
+		sleep 1
 	done
 	return $RET
 }
@@ -139,7 +137,7 @@ netvault_pkill(){
 #
 netvault_status(){
 	# call standard status command in netvault command
-	RETMSG=`${NV_HOME}/bin/nvpmgr status 2>&1`
+	RETMSG=`${OCF_RESKEY_nv_home}/bin/nvpmgr status 2>&1`
 	# check errors command output
 	RET=$?
 	if [ $RET -eq 0 ]; then
@@ -211,7 +209,7 @@ netvault_start(){
 			return ${OCF_SUCCESS}
 		elif [ $RET -eq 0 ]; then
 			# netvault cleaning and start command
-			${NV_HOME}/bin/nvpmgr startup 
+			${OCF_RESKEY_nv_home}/bin/nvpmgr startup 
 			# check errors command output
 			RET=$?
 			if [ $RET -ne 0 ]; then
@@ -244,7 +242,7 @@ netvault_stop(){
 		netvault_pkill
 	else
 	        # netvault stop
-       		${NV_HOME}/bin/nvpmgr shutdown
+       		${OCF_RESKEY_nv_home}/bin/nvpmgr shutdown
 	fi
 	
 	# stop waiting
@@ -272,7 +270,7 @@ netvault_stop(){
 			rm -rf $RESOURCE_LOCKFILES
 			outputLog navi "NetVault client stopped."
 			return ${OCF_SUCCESS}
-		elif [ "${IGN_ERR_FLG}" = "on" ]; then
+		elif [ "${OCF_RESKEY_ignore_error}" = "on" ]; then
 		        rm -rf $RESOURCE_LOCKFILES
 			outputLog navi "NetVault client still hasn't stopped yet. Ignore Error."
 			return ${OCF_SUCCESS}
@@ -282,25 +280,11 @@ netvault_stop(){
 
 
 #
-# get NV_HOME from /etc/.nv6_home if not set
-#
-findnvhome() {
-	if [ ! -d "${NV_HOME}" ]; then
-		NV_HOME=`head -n 1 /etc/.nv6_home`
-	fi
-	if [ ! -d "$NV_HOME" ]; then
-		MSG="Cannot locate NetVault home directory."
-		outputLog err ${OCF_ERR_GENERIC} $MSG
-	fi
-}
-
-
-#
 # Change Status Method
 #
 change_status(){
 	RET_STATUS=$?
-	if [ "${IGN_ERR_FLG}" = "on" ]; then
+	if [ "${OCF_RESKEY_ignore_error}" = "on" ]; then
 		RET_STATUS=${OCF_SUCCESS}
 	fi
 	return ${RET_STATUS}
