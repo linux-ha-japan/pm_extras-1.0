@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # External STONITH module to check the dead or alive of target
 # and avoid shooting each other in split-brain.
