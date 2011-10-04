@@ -378,7 +378,7 @@ Designated example in IPv6(interface designation) : fe80::20c:29ff:fe8a:d5d%eth0
 </longdesc>
 </parameter>
 
-<parameter name="standby_check_command" unique="1" required="0">
+<parameter name="standby_check_command" unique="0" required="0">
 <content type="string"/>
 <shortdesc lang="en">
 standby check command
