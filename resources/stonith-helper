@@ -317,7 +317,7 @@ getinfo-devurl)
 getinfo-xml)
 	cat << XML
 <parameters>
-<parameter name="hostlist" unique="1" required="1">
+<parameter name="hostlist" unique="0" required="1">
 <content type="string"/>
 <shortdesc lang="en">
 Hostlist
@@ -327,7 +327,7 @@ The list of hosts that the STONITH device controls.
 </longdesc>
 </parameter>
 
-<parameter name="run_dead_check" unique="1" required="0">
+<parameter name="run_dead_check" unique="0" required="0">
 <content type="string"/>
 <shortdesc lang="en">
 run dead check
@@ -338,7 +338,7 @@ If it is "no", Don't check the dead or alive.
 </longdesc>
 </parameter>
 
-<parameter name="run_quorum_check" unique="1" required="0">
+<parameter name="run_quorum_check" unique="0" required="0">
 <content type="string" default="$RUN_QUORUM_CHK"/>
 <shortdesc lang="en">
 run quorum check
@@ -351,7 +351,7 @@ In the case of others, this parameter must not set it.
 </longdesc>
 </parameter>
 
-<parameter name="run_standby_wait" unique="1" required="0">
+<parameter name="run_standby_wait" unique="0" required="0">
 <content type="string"/>
 <shortdesc lang="en">
 run standby wait
@@ -362,7 +362,7 @@ If it is "no", Don't check the active/standby.
 </longdesc>
 </parameter>
 
-<parameter name="dead_check_target" unique="1" required="0">
+<parameter name="dead_check_target" unique="0" required="0">
 <content type="string"/>
 <shortdesc lang="en">
 dead check target
@@ -390,7 +390,7 @@ If return code of command is not "0", local node is standby. Then, it waits.
 </longdesc>
 </parameter>
 
-<parameter name="standby_wait_time" unique="1" required="0">
+<parameter name="standby_wait_time" unique="0" required="0">
 <content type="integer" default="$WAIT_TIME"/>
 <shortdesc lang="en">
 standby wait time(sec)
@@ -401,7 +401,7 @@ To avoid fencing each other when split-brain occurs.
 </longdesc>
 </parameter>
 
-<parameter name="quorum_check_wait_time" unique="1" required="0">
+<parameter name="quorum_check_wait_time" unique="0" required="0">
 <content type="integer" default="$WAIT_CHECK_QUORUM_TIME"/>
 <shortdesc lang="en">
 check quorum wait time(sec)
@@ -411,7 +411,7 @@ time (sec.) to wait when the check quorum.
 </longdesc>
 </parameter>
 
-<parameter name="dead_check_trialcount" unique="1" required="0">
+<parameter name="dead_check_trialcount" unique="0" required="0">
 <content type="integer" default="$DEAD_CHECK_TRIALCOUNT"/>
 <shortdesc lang="en">
 dead check trialcount
