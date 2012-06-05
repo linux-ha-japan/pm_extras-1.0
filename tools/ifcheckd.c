@@ -32,11 +32,21 @@ int attr_dampen = 0; /* 0s */
 int ident;	/* our pid */
 cib_t *cib_conn = NULL;
 
+GHashTable *iface_hash = NULL;
+IPC_Channel *crmd_channel = NULL;
+char *ifcheckd_uuid = NULL;
+int message_timer_id = -1;
+int message_timeout_ms = 1*1000;
+
 static void ifcheckd_lstatus_callback(
 	const char *node, const char *link, const char *status, void *private_data);
 static void do_node_walk(ll_cluster_t *hb_cluster);
-static void do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node);
+static void do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node, gboolean boSend);
 static void send_update(gpointer attr_name, gpointer attr_value, gpointer user_data);
+static void crmifcheckd_ipc_connection_destroy(gpointer user_data);
+static gboolean ifcheckd_message_timeout(gpointer data);
+static gboolean connect_crm(void);
+static void send_crm_op_ping_message(void);
 
 static void
 ifcheckd_shutdown(int nsig)
@@ -127,16 +137,18 @@ register_with_ha(void)
 }
 
 static void
-do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node)
+do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node, gboolean boSend)
 {
 	const char *iface_name = NULL;
 	const char *iface_status = NULL;
 	const char *ha_node_status = NULL;
 	const char *ha_node_type = NULL;
 	char *attr_name = NULL;
-	GHashTable *iface_hash = NULL;
 
 	crm_debug_2("Invoked");
+	if (iface_hash == NULL) {
+		iface_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	}
 	ha_node_type = hb_cluster->llc_ops->node_type(hb_cluster, ha_node);
 	if(safe_str_eq("ping", ha_node_type)) {
 		/* ignore ping node */
@@ -144,7 +156,6 @@ do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node)
 		return;
 	}
 
-	iface_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	if(hb_cluster->llc_ops->init_ifwalk(hb_cluster, ha_node) != HA_OK) {
 		crm_err("Cannot start heartbeat link interface walk.");
@@ -174,20 +185,38 @@ do_if_walk(ll_cluster_t *hb_cluster, const char *ha_node)
 		return;
 	}
 
-	g_hash_table_foreach(iface_hash, send_update, NULL);
-	g_hash_table_destroy(iface_hash);
+	if (boSend){
+		send_crm_op_ping_message();
+	}
+
 	crm_debug_2("Complete");
 }
 
+static void 
+send_crm_op_ping_message() {
+	if ( message_timer_id == -1 ) {
+		message_timer_id = g_timeout_add(
+			message_timeout_ms, ifcheckd_message_timeout, NULL);
+	}
+	return;
+}
 static void
 do_node_walk(ll_cluster_t *hb_cluster)
 {
 	const char *ha_node = NULL;
 
+	if (iface_hash == NULL) {
+		iface_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	}
+
 	crm_info("Requesting the list of configured nodes");
 	if(hb_cluster->llc_ops->init_nodewalk(hb_cluster) != HA_OK) {
 		crm_err("Cannot start node walk.");
 		crm_err("REASON: %s", hb_cluster->llc_ops->errmsg(hb_cluster));
+		if (iface_hash != NULL) {
+			g_hash_table_destroy(iface_hash);
+			iface_hash = NULL;
+		}
 		return;
 	}
 
@@ -197,14 +226,20 @@ do_node_walk(ll_cluster_t *hb_cluster)
 			crm_debug("Node %s: The own node skips", ha_node);
 			continue;
 		}
-		do_if_walk(hb_cluster, ha_node);
+		do_if_walk(hb_cluster, ha_node, FALSE);
 	}
 
 	if(hb_cluster->llc_ops->end_nodewalk(hb_cluster) != HA_OK) {
 		crm_err("Cannot end node walk.");
 		crm_err("REASON: %s", hb_cluster->llc_ops->errmsg(hb_cluster));
+		if (iface_hash != NULL) {
+			g_hash_table_destroy(iface_hash);
+			iface_hash = NULL;
+		}
 		return;
 	}
+
+	send_crm_op_ping_message();
 
 	crm_debug_2("Complete");
 }
@@ -220,6 +255,129 @@ static struct crm_option long_options[] = {
 		"updating the CIB with a changed attribute"},
 	{0, 0, 0, 0}
 };
+void
+ifchecked_ipc_connection_destroy(gpointer user_data)
+{
+	crm_debug_2("Invoked");
+	crm_err("Connection to CRMd was terminated");
+
+	if (mainloop != NULL && g_main_is_running(mainloop)) {
+		g_main_quit(mainloop);
+		return;
+	}
+	exit(LSB_EXIT_OK);
+}
+
+gboolean
+ifcheckd_message_timeout(gpointer data)
+{
+	xmlNode *msg_data = NULL;
+
+	crm_debug_2("Invoked");
+	crm_debug("send message CRM_OP_PING");
+
+	xmlNode *cmd = create_request(
+			CRM_OP_PING, msg_data, NULL, CRM_SYSTEM_DC,
+			crm_system_name, ifcheckd_uuid);
+
+	send_ipc_message(crmd_channel, cmd);
+	free_xml(cmd);
+
+	return TRUE;
+}
+gboolean
+ifcheckd_msg_callback(IPC_Channel * server, void *private_data)
+{
+	int lpc = 0;
+	xmlNode *msg = NULL;
+	gboolean stay_connected = TRUE;
+	gboolean isLiveDC = FALSE;
+	
+	
+	g_source_remove(message_timer_id);
+	message_timer_id = -1;
+
+	while(IPC_ISRCONN(server)) {
+		if(server->ops->is_message_pending(server) == 0) {
+			break;
+		}
+
+		msg = xmlfromIPC(server, MAX_IPC_DELAY);
+		if (msg == NULL) {
+			break;
+		}
+
+		lpc++;
+		fprintf(stderr, ".");
+		crm_log_xml(LOG_DEBUG_2, "[inbound]", msg);
+
+		const char *dc = crm_element_value(msg, F_CRM_HOST_FROM);
+		if(dc != NULL) {
+			crm_debug_2("Alive DC(%s)", dc);
+			isLiveDC = TRUE;
+		} else {
+			crm_debug_2("Not Alive DC");
+		}
+
+		free_xml(msg);
+		msg = NULL;
+
+		if(server->ch_status != IPC_CONNECT) {
+			stay_connected = FALSE;
+			break;
+		}
+
+		if (isLiveDC == TRUE && iface_hash != NULL) {
+			crm_debug_2("Alive DC send_update() CALL");
+			g_hash_table_foreach(iface_hash, send_update, NULL);
+			g_hash_table_destroy(iface_hash);
+			iface_hash = NULL;
+		} else if (isLiveDC == FALSE && iface_hash != NULL) {
+			crm_debug_2("Not Alive DC(wait.....)");
+		}
+	}
+	
+	crm_debug_2("Processed %d messages (%d)", lpc, server->ch_status);
+    
+	if (isLiveDC == FALSE && iface_hash != NULL && stay_connected == TRUE) {
+		crm_debug_2("Not Live DC timer set");
+		message_timer_id = g_timeout_add(
+			message_timeout_ms, ifcheckd_message_timeout, NULL);
+	}
+
+	return stay_connected;
+}
+gboolean
+connect_crm(void)
+{
+	GCHSource *src = NULL;
+	
+	crm_malloc0(ifcheckd_uuid, 11);
+	if(ifcheckd_uuid != NULL) {
+		snprintf(ifcheckd_uuid, 10, "%d", getpid());
+		ifcheckd_uuid[10] = '\0';
+	}
+	
+	while(src == NULL) {
+		src = init_client_ipc_comms(
+			CRM_SYSTEM_CRMD, ifcheckd_msg_callback, NULL, &crmd_channel);
+		if(src == NULL) {
+			crm_debug("Waiting signing on to the CRMd service\n");
+			sleep(1);
+		}
+	}
+
+	if(crmd_channel != NULL) {
+		send_hello_message(
+			crmd_channel, ifcheckd_uuid, crm_system_name,"0", "1");
+
+		set_IPC_Channel_dnotify(src, ifchecked_ipc_connection_destroy);
+		
+		crm_info("signing on to the CRMd service\n");
+		return TRUE;
+	} 
+	return FALSE;
+}
 
 int
 main(int argc, char **argv)
@@ -315,6 +473,17 @@ main(int argc, char **argv)
 		}
 		sleep(1);
 	}
+	if(cib_conn) {
+		cib_conn->cmds->signoff(cib_conn);
+		cib_delete(cib_conn);
+	}
+
+
+	if (connect_crm() == FALSE) {
+		crm_err("crmd connection failed");
+		cl_flush_logs();
+		exit(LSB_EXIT_GENERIC);
+	}
 
 	if(register_with_ha() == FALSE) {
 		crm_err("HA registration failed");
@@ -332,10 +501,6 @@ main(int argc, char **argv)
 		hb_cluster->llc_ops->delete(hb_cluster);
 	}
 
-	if(cib_conn) {
-		cib_conn->cmds->signoff(cib_conn);
-		cib_delete(cib_conn);
-	}
 
 	return 0;
 }
@@ -356,7 +521,7 @@ ifcheckd_lstatus_callback(const char *node, const char *lnk, const char *status,
 {
 	crm_debug("Link status change: node %s link %s now has status [%s]", node, lnk, status);
 
-	do_if_walk(hb_cluster, node);
+	do_if_walk(hb_cluster, node, TRUE);
 
 	return;
 }
