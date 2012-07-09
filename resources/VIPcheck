@@ -54,7 +54,7 @@ ping target VIP address.
 <content type="string" default="" />
 </parameter>
 
-<parameter name="count" unique="1">
+<parameter name="count" unique="0" required="0">
 <longdesc lang="en">
 repeat times
 </longdesc>
@@ -62,7 +62,7 @@ repeat times
 <content type="integer" default="1" />
 </parameter>
 
-<parameter name="wait" unique="1">
+<parameter name="wait" unique="0" required="0">
 <longdesc lang="en">
 wait times
 </longdesc>
