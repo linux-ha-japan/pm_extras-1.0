@@ -48,7 +48,7 @@ Resource Agent script for NetVault client. It manages a NetVault client instance
 <shortdesc lang="en">NetVault client resource agent</shortdesc>
 
 <parameters>
-<parameter name="nv_home" unique="1">
+<parameter name="nv_home" unique="1" required="0">
 <longdesc lang="en">
 The NetVault home directory (NV_HOME).
 It should be on the shared disk in the typical NetVault cluster configuration.
@@ -57,7 +57,7 @@ Refer to /etc/.nv6_home to make sure your configuration.
 <shortdesc lang="en">home directory name</shortdesc>
 <content type="string" default="`head -n 1 /etc/.nv6_home`" />
 </parameter>
-<parameter name="ignore_error" unique="1">
+<parameter name="ignore_error" unique="0" required="0">
 <longdesc lang="en">
 In case ignore error that this value is "on". Default is "off".
 </longdesc>
