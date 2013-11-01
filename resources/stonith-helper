@@ -33,6 +33,10 @@ WAIT_TIME=25
 standby_wait_time=${standby_wait_time=${WAIT_TIME}}
 RUN_QUORUM_CHK="no"
 run_quorum_check=${run_quorum_check=${RUN_QUORUM_CHK}}
+RUN_ONLINE_CHK="yes"
+run_online_check=${run_online_check=${RUN_ONLINE_CHK}}
+ONLINE_CHK_RETRY_MAX=5
+online_check_retry_max=${online_check_retry_max=${ONLINE_CHK_RETRY_MAX}}
 WAIT_CHECK_QUORUM_TIME=10
 quorum_check_wait_time=${quorum_check_wait_time=${WAIT_CHECK_QUORUM_TIME}}
 DEAD_CHECK_TRIALCOUNT=5
@@ -237,12 +241,49 @@ dead_check() {
 	exit 0
 }
 
+
+#
+# Check the state of whether the host is online.
+# arg   : host name
+# return: host is not online : 1
+#       : host is online : 0
+#
+online_check() {
+	local host=`echo $1 | tr '[A-Z]' '[a-z]'`
+	local rc=1
+	local count=0
+	local crmnode=""
+
+	${HA_LOG_SH} debug "checking state of $host"
+	while [ $count -le $online_check_retry_max ]; do
+		[ $count -ne 0 ] && ${HA_LOG_SH} warn "rechecking state of $host ($count/$online_check_retry_max)"
+		crmnode=`crm_node -p`
+		if [ $? -eq 0 ]; then
+			echo $crmnode | tr '[A-Z]' '[a-z]' | grep -w -q "${host}"
+			if [ $? -eq 0 ]; then
+				${HA_LOG_SH} debug "$host is online."
+				return 0
+			fi
+			${HA_LOG_SH} debug "$host is not online. ($is_online)"
+			return 1
+		fi
+		sleep 1
+		count=`expr $count + 1`
+	done
+
+	${HA_LOG_SH} warn "Execution of crm_node failed. A State of $host is unknown."
+	return 1
+}
+
+
 #
 # Wait for a while if the local node is standby.
 # arg   : nothing
 # return: nothing
 #
 standby_wait() {
+	local rc
+
 	if expr "${run_standby_wait}" : "[Nn]" >/dev/null 2>&1 ; then
 		${HA_LOG_SH} debug "Don't run standby_wait"
 		return
@@ -253,8 +294,21 @@ standby_wait() {
 	rc=$?
 	${HA_LOG_SH} debug "standby check command: \"${standby_check_command}\" (rc=${rc})"
 	if [ "${rc}" != 0 ] ; then
+
+		# Do not run standby_wait if state of host is online.
+		if expr "${run_online_check}" : "[Nn]" >/dev/null 2>&1 ; then
+			${HA_LOG_SH} debug "Don't run online_check."
+		else
+			if  online_check $1 ; then
+				${HA_LOG_SH} info "$1 is online. Skip standby_wait."
+				return
+			fi
+		fi
+
 		${HA_LOG_SH} info "standby wait ${standby_wait_time}sec"
 		sleep ${standby_wait_time}
+	else
+		${HA_LOG_SH} info "standby_check_command success(rc=${rc}). Skip standby_wait."
 	fi
 }
 
@@ -278,7 +332,7 @@ off|reset)
 	check_parameters
 
 	dead_check
-	standby_wait
+	standby_wait $2
 	quorum_check
 	exit 1
 	;;
@@ -288,7 +342,7 @@ status)
 	exit 0
 	;;
 getconfignames)
-	echo "hostlist run_dead_check run_quorum_check run_standby_wait dead_check_target dead_check_trialcount standby_check_command standby_wait_time quorum_check_wait_time"
+	echo "hostlist run_dead_check run_quorum_check run_online_check online_check_retry_max run_standby_wait dead_check_target dead_check_trialcount standby_check_command standby_wait_time quorum_check_wait_time"
 	exit 0
 	;;
 getinfo-devid)
@@ -343,6 +397,27 @@ If it is not "no" or not set, check the quorum.
 If it is "no", Don't check the quorum.
 When setting of "no-quorum-policy" is set in "freeze" or "stop", you can use this parameter.
 In the case of others, this parameter must not set it.
+</longdesc>
+</parameter>
+
+<parameter name="run_online_check" unique="0" required="0">
+<content type="string" default="$RUN_ONLINE_CHK"/>
+<shortdesc lang="en">
+run online check or not
+</shortdesc>
+<longdesc lang="en">
+If it is not "no" or not set, check the online.
+If it is "no", Don't check the online.
+</longdesc>
+</parameter>
+
+<parameter name="online_check_retry_max" unique="0" required="0">
+<content type="integer" default="$ONLINE_CHK_RETRY_MAX"/>
+<shortdesc lang="en">
+max count of retry online_check
+</shortdesc>
+<longdesc lang="en">
+The maximum number of times to retry online_check.
 </longdesc>
 </parameter>
 
