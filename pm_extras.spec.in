@@ -28,20 +28,7 @@ Requires: pacemaker >= 1.0.9, resource-agents >= 1.0.3, cluster-glue >= 1.0.6, h
 
 ########################################
 %description
-Extra Scripts 
- for pacemaker 1.0.9 
-           and 
-     resoucr-agent 1.0.3 
-           and 
-     cluster-glue 1.0.6
-
- * 2010/10/6
-   * RA NVclient 1.4
-   * RA VIPcheck 1.1
-   * plugin stonith-helper 1.0
-   * tool ifcheckd 1.0 for Heartbeat
-   * tool iface_check.lcrso 1.0 for Corosync
-    - The use is going to be enabled after corosync-2.0.
+Extra Scripts for pacemaker  and resource-agents and cluster-glue.
 
 ########################################
 %prep
@@ -117,3 +104,10 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 * Fri May 13 2011 Hideo Yamauchi <yamauchi@matrixjpn.com>
 * Wed Oct 6 2010 Yuusuke IIDA <iidayuus@intellilink.co.jp>
 - initial release
+  - RA NVclient 1.4
+  - RA VIPcheck 1.1
+  - plugin stonith-helper 1.0
+  - tool ifcheckd 1.0 for Heartbeat
+  - tool iface_check.lcrso 1.0 for Corosync
+    - The use is going to be enabled after corosync-2.0.
+
