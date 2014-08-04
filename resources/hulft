@@ -1,0 +1,255 @@
+#!/bin/bash
+#
+#   Hulft OCF Resource Agent
+#
+# Copyright (c) 2014 NIPPON TELEGRAPH AND TELEPHONE CORPORATION
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+# Defaults
+OCF_RESKEY_hulexep_default=/usr/local/HULFT/bin
+OCF_RESKEY_hulpath_default=/mnt/shareddisk/HULFT/etc
+OCF_RESKEY_start_opts_default=""
+OCF_RESKEY_huldname_default=""
+OCF_RESKEY_sync_stop_default=10
+
+: ${OCF_RESKEY_hulexep=${OCF_RESKEY_hulexep_default}}
+: ${OCF_RESKEY_hulpath=${OCF_RESKEY_hulpath_default}}
+: ${OCF_RESKEY_start_opts=${OCF_RESKEY_start_opts_default}}
+: ${OCF_RESKEY_sync_stop=${OCF_RESKEY_sync_stop_default}}
+
+usage() {
+    cat <<EOF
+    usage: $0 start|stop|status|monitor|meta-data|validate-all|methods
+EOF
+  return $OCF_ERR_ARGS
+}
+
+meta_data() {
+    cat <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="hulft">
+<version>1.0</version>
+
+<longdesc lang="en">
+This is a HULFT Resource Agent.
+</longdesc>
+<shortdesc lang="en">HULFT Resource Agent</shortdesc>
+
+<parameters>
+<parameter name="hulexep" unique="0" required="0">
+<longdesc lang="en">
+HULEXEP path
+</longdesc>
+<shortdesc lang="en">HULEXEP</shortdesc>
+<content type="string" default="${OCF_RESKEY_hulexep_default}" />
+</parameter>
+
+<parameter name="hulpath" unique="0" required="0">
+<longdesc lang="en">
+HULPATH path
+</longdesc>
+<shortdesc lang="en">HULPATH</shortdesc>
+<content type="string" default="${OCF_RESKEY_hulpath_default}" />
+</parameter>
+
+<parameter name="sync_stop" unique="0" required="0">
+<longdesc lang="en">
+timeout(sec) of synchronous stop.
+required more than 10 seconds.
+</longdesc>
+<shortdesc lang="en">timeout of synchronous stop</shortdesc>
+<content type="integer" default="${OCF_RESKEY_sync_stop_default}" />
+</parameter>
+
+<parameter name="huldname" unique="0" required="1">
+<longdesc lang="en">
+HULFT daemon name (snd/rcv/obs)
+</longdesc>
+<shortdesc lang="en">huldname</shortdesc>
+<content type="string" default="${OCF_RESKEY_huldname_default}" />
+</parameter>
+
+<parameter name="start_opts" unique="0" required="0">
+<longdesc lang="en">
+start options.
+Example : "-o -l /mnt/shareddisk/HULFT/log/hullog"
+DO NOT USE "-mutual" and "-endwait".
+</longdesc>
+<shortdesc lang="en">start options</shortdesc>
+<content type="string" default="${OCF_RESKEY_start_opts_default}" />
+</parameter>
+</parameters>
+
+<actions>
+<action name="start" timeout="60" />
+<action name="stop" timeout="80" />
+<action name="status" timeout="60" />
+<action name="monitor" depth="0" timeout="30" interval="30"/>
+<action name="meta-data" timeout="5" />
+<action name="validate-all" timeout="5" />
+<action name="methods" timeout="5" />
+</actions>
+</resource-agent>
+EOF
+}
+
+hulft_methods() {
+  cat <<EOF
+    start
+    stop
+    status
+    monitor
+    methods
+    meta-data
+    validate-all
+EOF
+}
+
+hulft_start() {
+    if hulft_status; then
+        ocf_log info "HULFT($OCF_RESKEY_huldname) already running. "
+        return $OCF_SUCCESS
+    fi
+
+    ocf_log info "starting HULFT($OCF_RESKEY_huldname) : $HULBIN -start $OCF_RESKEY_start_opts"
+    $HULBIN -start $OCF_RESKEY_start_opts
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        ocf_log err "cannot start HULFT($OCF_RESKEY_huldname):$rc"
+        return $OCF_ERR_GENERIC
+    fi
+
+    return $OCF_SUCCESS
+}
+
+hulft_stop() {
+    if ! hulft_status
+    then
+        ocf_log info "HULFT($OCF_RESKEY_huldname) already stopped"
+        return $OCF_SUCCESS
+    fi
+
+    ocf_log info "stopping HULFT($OCF_RESKEY_huldname) synchronously."
+    $HULBIN -stop -t -timeout $OCF_RESKEY_sync_stop
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        ocf_log info "cannot stop HULFT($OCF_RESKEY_huldname):$rc synchronously. escalate to a forced stop"
+        $HULBIN -stop -f -timeout 10
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            ocf_log err "cannot stop HULFT($OCF_RESKEY_huldname):$rc"
+            return $OCF_ERR_GENERIC
+        fi
+    fi
+    return $OCF_SUCCESS
+}
+
+hulft_status() {
+    $HULBIN -status
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+hulft_monitor() {
+    if ! hulft_status
+    then
+    ocf_log info "HULFT($OCF_RESKEY_huldname) is down"
+    return $OCF_NOT_RUNNING
+    fi
+
+    return $OCF_SUCCESS
+}
+
+hulft_validate_all() {
+    if [ ! -d $OCF_RESKEY_hulexep ]; then
+    ocf_log err "hulexep parameter is invalid : $OCF_RESKEY_hulexep"
+        return $OCF_ERR_PERM
+    fi
+
+    if ! ocf_is_probe; then
+        if [ ! -d $OCF_RESKEY_hulpath ]; then
+            ocf_log err "hulpath parameter is invalid : $OCF_RESKEY_hulpath"
+            return $OCF_ERR_PERM
+        fi
+    fi
+
+    return $OCF_SUCCESS
+}
+
+###### MAIN #######
+
+if [ $# -ne 1 ]
+then
+    usage
+    exit $OCF_ERR_GENERIC
+fi
+
+case "$1" in
+    methods)    hulft_methods
+                exit $?;;
+
+    meta-data)  meta_data
+                exit $OCF_SUCCESS;;
+esac
+
+hulft_validate_all
+rc=$?
+[ "$1" == "validate-all" ] && exit $rc
+
+export HULEXEP=$OCF_RESKEY_hulexep
+export HULPATH=$OCF_RESKEY_hulpath
+export PATH=$HULEXEP:$PATH
+
+# check HULFT daemon name (snd/rcv/obs)
+HULBIN=""
+case "$OCF_RESKEY_huldname" in
+    snd)    HULBIN="$OCF_RESKEY_hulexep/hulclustersnd";;
+    rcv)    HULBIN="$OCF_RESKEY_hulexep/hulclusterrcv";;
+    obs)    HULBIN="$OCF_RESKEY_hulexep/hulclusterobs";;
+    *)      ocf_log err "huldname parameter is invalid : $OCF_RESKEY_huldname"
+            exit $OCF_ERR_CONFIGURED;;
+esac
+
+# What kind of method was invoked?
+case "$1" in
+    status)     if hulft_status
+                then
+                    ocf_log info "HULFT($OCF_RESKEY_huldname) is up"
+                    exit $OCF_SUCCESS
+                else
+                    ocf_log info "HULFT($OCF_RESKEY_huldname) is down"
+                    exit $OCF_NOT_RUNNING
+                fi;;
+    monitor)    hulft_monitor
+                exit $?;;
+    start)      hulft_start
+                exit $?;;
+    stop)       hulft_stop
+                exit $?;;
+    *)          usage
+                exit $OCF_ERR_UNIMPLEMENTED;;
+esac
+
