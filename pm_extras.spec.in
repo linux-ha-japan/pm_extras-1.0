@@ -86,6 +86,7 @@ rm -rf $RPM_BUILD_DIR/%{name}-%{version}
 %dir %{ocfdir}
 %attr (755, root, root) %{ocfdir}/NVclient
 %attr (755, root, root) %{ocfdir}/VIPcheck
+%attr (755, root, root) %{ocfdir}/hulft
 
 %dir %{extdir}
 %attr (755, root, root) %{extdir}/stonith-helper
